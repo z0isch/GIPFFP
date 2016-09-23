@@ -1,3 +1,3 @@
 # GIPFFP
 
-add description of GIPFFP here
+AI for the game GIPF
