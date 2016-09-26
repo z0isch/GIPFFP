@@ -1,4 +1,4 @@
-import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import           Data.Set        (Set)
 import qualified Data.Set        as Set
 import           GIPF.Types
@@ -30,17 +30,19 @@ main = hspec $ do
       setOfPieceRun(pieceRuns (updateGrid emptyGrid pieceRun1of5)) `shouldBe` setOfPieceRun [pieceRun1of5]
     it "2 Run of 4" $
       setOfPieceRun(pieceRuns (updateGrid emptyGrid (pieceRun1of4 ++ pieceRun2of4Part2))) `shouldBe` setOfPieceRun [pieceRun2of4Part2, pieceRun1of4]
+    it "QC gen test" $
+      setOfPieceRun (pieceRuns pieceRunQCGrid) `shouldBe` setOfPieceRun []
 
-placePieceOpenExpected :: Map (Int, Int) (Maybe Piece)
+placePieceOpenExpected :: Grid
 placePieceOpenExpected = updateGrid emptyGrid [((3,0), Piece Player1 NormalPiece)]
 
-placePiecePush1Expected :: Map (Int, Int) (Maybe Piece)
+placePiecePush1Expected :: Grid
 placePiecePush1Expected = updateGrid standardGrid [((3,0), Piece Player1 NormalPiece),((3,-1), Piece Player2 GipfPiece)]
 
-placePiecePush2Expected :: Map (Int, Int) (Maybe Piece)
+placePiecePush2Expected :: Grid
 placePiecePush2Expected = updateGrid standardGrid [((3,0), Piece Player2 NormalPiece),((3,-1), Piece Player1 NormalPiece),((3,-2), Piece Player2 GipfPiece)]
 
-placePiecePush1CrossExpected :: Map (Int, Int) (Maybe Piece)
+placePiecePush1CrossExpected :: Grid
 placePiecePush1CrossExpected = updateGrid standardGrid [((3,0), Piece Player1 NormalPiece),((2,0), Piece Player2 NormalPiece),((3,-1), Piece Player1 NormalPiece),((3,-2), Piece Player2 GipfPiece)]
 
 pieceRun1of4 :: [((Int, Int), Piece)]
@@ -51,6 +53,9 @@ pieceRun2of4Part2 = [((0,0), Piece Player1 NormalPiece),((0,-1), Piece Player1 N
 
 pieceRun1of5 :: [((Int, Int), Piece)]
 pieceRun1of5 = [((-1,0), Piece Player1 NormalPiece),((0,0), Piece Player1 NormalPiece),((1,0), Piece Player1 NormalPiece),((2,0), Piece Player1 NormalPiece),((3,0), Piece Player1 NormalPiece)]
+
+pieceRunQCGrid :: Grid
+pieceRunQCGrid  = Grid (Map.fromList [((-3,0),Just (Piece Player2 GipfPiece)),((-3,1),Just (Piece Player1 GipfPiece)),((-3,2),Just (Piece Player1 GipfPiece)),((-3,3),Just (Piece Player1 GipfPiece)),((-2,-1),Nothing),((-2,0),Nothing),((-2,1),Nothing),((-2,2),Just (Piece Player1 GipfPiece)),((-2,3),Just (Piece Player2 NormalPiece)),((-1,-2),Just (Piece Player2 NormalPiece)),((-1,-1),Just (Piece Player1 NormalPiece)),((-1,0),Just (Piece Player2 NormalPiece)),((-1,1),Just (Piece Player2 NormalPiece)),((-1,2),Nothing),((-1,3),Nothing),((0,-3),Just (Piece Player1 GipfPiece)),((0,-2),Just (Piece Player1 NormalPiece)),((0,-1),Just (Piece Player1 NormalPiece)),((0,0),Just (Piece Player2 NormalPiece)),((0,1),Just (Piece Player2 GipfPiece)),((0,2),Nothing),((0,3),Just (Piece Player2 GipfPiece)),((1,-3),Just (Piece Player1 NormalPiece)),((1,-2),Nothing),((1,-1),Just (Piece Player1 NormalPiece)),((1,0),Just (Piece Player1 NormalPiece)),((1,1),Just (Piece Player2 NormalPiece)),((1,2),Just (Piece Player2 GipfPiece)),((2,-3),Just (Piece Player2 GipfPiece)),((2,-2),Nothing),((2,-1),Nothing),((2,0),Nothing),((2,1),Just (Piece Player1 NormalPiece)),((3,-3),Just (Piece Player2 NormalPiece)),((3,-2),Just (Piece Player1 NormalPiece)),((3,-1),Just (Piece Player2 GipfPiece)),((3,0),Just (Piece Player2 GipfPiece))])
 
 setOfPieceRun :: [[((Int, Int), Piece)]] -> Set (Set ((Int, Int), Piece))
 setOfPieceRun = foldr (Set.insert . foldr Set.insert Set.empty) Set.empty
