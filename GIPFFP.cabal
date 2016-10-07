@@ -19,6 +19,7 @@ library
   exposed-modules:     GIPF.Types
                      , GIPF.Diagram
                      , GIPF.MoveParser
+                     , GIPF.MoveNotation
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , transformers
@@ -30,6 +31,7 @@ library
                      , diagrams-rasterific
                      , safe
                      , trifecta
+                     , validation
   default-language:    Haskell2010
 
 executable GIPFFP-exe

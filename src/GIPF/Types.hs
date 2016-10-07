@@ -18,7 +18,7 @@ data Player = Player1 | Player2
 
 derive makeArbitrary ''Player
 
-data PieceType = NormalPiece | GipfPiece
+data PieceType = NormalPiece | GIPFPiece
   deriving (Show, Eq, Ord)
 
 derive makeArbitrary ''PieceType
@@ -45,8 +45,25 @@ instance Arbitrary Grid where
 data PieceMove = PlaceMove (PieceType,Point) | PushMove (PieceType,Point) Direction | RemoveMove (Maybe [(PieceType,Point)])
   deriving (Eq,Ord,Show)
 
+data GIPFState = GIPFState
+  { _gsTurnNum :: Integer
+  , _gsTurn    :: Player
+  , _gsGrid    :: Grid
+  , _gsMoves   :: [PieceMove]
+  }
+  deriving (Eq, Show)
+
 distance :: Point -> Point -> Int
-distance (q,r) (q',r') = (abs (q - q') + abs (q + r - q' - r') + abs (r - r')) `div` 2
+distance (q,r) (q',r') = maximum $ map abs [q-q',r-r',q + r - q' - r']
+
+unitDirection :: Point -> Maybe Direction
+unitDirection (0,-1) = Just UpD
+unitDirection (-1,0) = Just UpLeftD
+unitDirection (-1,1) = Just DownLeftD
+unitDirection (0,1)  = Just DownD
+unitDirection (1,0)  = Just DownRightD
+unitDirection (1,-1) = Just UpRightD
+unitDirection _      = Nothing
 
 oppositeDirection :: Direction -> Direction
 oppositeDirection UpD        = DownD
@@ -66,9 +83,14 @@ getDirection (x,y) (x',y')
   | x == x'+1 && y == y'-1 = Just UpRightD
   | otherwise              = Nothing
 
-findDir :: Point -> Point -> Maybe Direction
-findDir p1 p2 = fmap fst mDir
-  where mDir = find (elem p2 . snd) $ map (\d -> (d,followDir 4 d p1)) [UpD ..]
+findDirection :: Point -> Point -> Maybe Direction
+findDirection (x,y) (x',y')
+  | xV == 0 || yV == 0 || zV == 0 = unitDirection (xV `div` dV, yV `div` dV)
+  | otherwise                     = Nothing
+  where z = (- x) - y
+        z' = (- x') - y'
+        (xV,yV,zV) = (x'-x,y'-y,z'-z)
+        dV = distance (x,y) (x',y')
 
 getNeighbor :: Point -> Direction -> Point
 getNeighbor (x,y) UpD        = (x,y-1)
@@ -90,10 +112,12 @@ emptyGrid = Grid $ Map.fromList [((x,y),Nothing) |x <- [-3..3], y <- [-3..3], di
 standardGrid :: Grid
 standardGrid = updateGrid emptyGrid (zip corners players)
   where
-    players = concat $ transpose [replicate 3 (Piece Player2 GipfPiece), replicate 3 (Piece Player1 GipfPiece)]
+    players = concat $ transpose [replicate 3 (Piece Player2 GIPFPiece), replicate 3 (Piece Player1 GIPFPiece)]
 
 edge :: [Point]
 edge = [(0,-3),(1,-3),(2,-3),(3,-3),(3,-2),(3,-1),(3,0),(2,1),(1,2),(0,3),(-1,3),(-2,3),(-3,3),(-3,2),(-3,1),(-3,0),(-2,-1),(-1,-2)]
+outerEdge :: [Point]
+outerEdge = [(0,-4),(-1,-3),(1,-4),(1,-4),(2,-4),(2,-4),(3,-4),(3,-4),(4,-4),(4,-3),(4,-3),(4,-2),(4,-2),(4,-1),(3,1),(4,-1),(4,0),(2,2),(3,1),(1,3),(2,2),(0,4),(-1,4),(1,3),(-1,4),(-2,4),(-2,4),(-3,4),(-3,4),(-4,3),(-4,4),(-4,2),(-4,3),(-4,1),(-4,2),(-3,-1),(-4,0),(-4,1),(-2,-2),(-3,-1),(-1,-3),(-2,-2)]
 
 corners :: [Point]
 corners = [(0,-3), (3,-3), (3,0), (0,3), (-3,3), (-3,0)]
@@ -173,9 +197,16 @@ makeMove pl (Grid g) (PlaceMove (pT,p)) = case Map.lookup p g of
   Nothing -> Left "Can't place a piece on top of another piece"
 makeMove pl g (PushMove (pT,p) d) = maybe (Left "Invalid push") Right $ playPiece (p, Piece pl pT) d g
 makeMove _ (Grid g) (RemoveMove (Just rs))
-  | pcsExist = Right $ Grid $ foldr (Map.adjust (const Nothing) . snd) g rs
+  | pcsExist  = Right $ Grid $ foldr (Map.adjust (const Nothing) . snd) g rs
   | otherwise = Left "All the pieces do not exist in the grid"
   where
     pcsExist = isJust $ traverse (\(pT,r) -> r `Map.lookup` g >>= fmap (pieceTypeEq pT)) rs
     pieceTypeEq t (Piece _ t') = t == t'
 makeMove _ _ (RemoveMove Nothing) = undefined
+
+nextGIPFState :: GIPFState -> PieceMove -> Either String GIPFState
+nextGIPFState gs p = undefined
+  where
+    nextPlayer
+      | _gsTurn gs == Player1 = Player2
+      | otherwise             = Player1
