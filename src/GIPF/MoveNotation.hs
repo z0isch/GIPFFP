@@ -3,6 +3,7 @@ module GIPF.MoveNotation where
 import           Data.List       (intercalate)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe      (fromMaybe)
 import           Data.Validation
 import           GIPF.Types
 
@@ -27,17 +28,22 @@ pieceNotation :: (PieceType, Point) -> Either String String
 pieceNotation (pT,p) = (pieceTypeToNotation pT ++ ) <$> pointToNotation p
 
 pieceMoveToNotation :: PieceMove -> AccValidation [String] String
-pieceMoveToNotation (PlaceMove pM)        = mkVal $ pieceNotation pM
-pieceMoveToNotation (PushMove (pT,p) dir) = makeNotation <$> mkVal (pieceNotation (pT,opositeNeighbor)) <*> mkVal (pieceNotation (NormalPiece,p))
+pieceMoveToNotation (rm, im, rm') = (\rs i rs' -> intercalate ";" $ filter (not . null) $ concat [rs,[i],rs'])
+  <$> fromMaybe (AccSuccess [""]) (traverse goR <$> rm)
+  <*> goI im
+  <*> fromMaybe (AccSuccess [""]) (traverse goR <$> rm')
   where
-    makeNotation p1 p2 = p1++"-"++p2
-    opositeNeighbor = getNeighbor p (oppositeDirection dir)
-pieceMoveToNotation (RemoveMove Nothing)    = AccSuccess "x"
-pieceMoveToNotation (RemoveMove (Just pcs)) = ("x" ++) . intercalate "," <$> nPcs
-  where
-    nPcs :: AccValidation [String] [String]
-    nPcs = traverse (mkVal . pointToNotation . snd) pcs
+    goI (PlaceMove pM) = mkAcc $ pieceNotation pM
+    goI (PushMove (pT,p) dir) = makeNotation <$> mkAcc (pieceNotation (pT,opositeNeighbor)) <*> mkAcc (pieceNotation (NormalPiece,p))
+      where
+        makeNotation p1 p2 = p1++"-"++p2
+        opositeNeighbor = getNeighbor p (oppositeDirection dir)
+    goR (RemoveMove Nothing)    = AccSuccess "x"
+    goR (RemoveMove (Just pcs)) = ("x" ++) . intercalate "," <$> nPcs
+      where
+        nPcs :: AccValidation [String] [String]
+        nPcs = traverse (mkAcc . pointToNotation . snd) pcs
 
-mkVal :: Applicative f => Either a b -> AccValidation (f a) b
-mkVal (Left a)  = AccFailure (pure a)
-mkVal (Right b) = AccSuccess b
+mkAcc :: Applicative f => Either a b -> AccValidation (f a) b
+mkAcc (Left a)  = AccFailure (pure a)
+mkAcc (Right b) = AccSuccess b

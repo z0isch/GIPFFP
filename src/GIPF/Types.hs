@@ -2,14 +2,16 @@
 
 module GIPF.Types where
 
-import           Control.Monad   (join)
+import           Control.Monad   (foldM, join)
 import           Data.Bool       (bool)
 import           Data.DeriveTH   (derive, makeArbitrary)
-import           Data.List       (find, transpose)
+import           Data.List       (group, intercalate, sortOn, transpose)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import           Data.Maybe      (fromJust, isJust, isNothing, mapMaybe)
+import           Data.Maybe      (fromJust, fromMaybe, isJust, isNothing,
+                                  mapMaybe)
 import qualified Data.Set        as Set
+import           Data.Validation
 import           Safe            (headMay)
 import           Test.QuickCheck
 
@@ -42,16 +44,40 @@ instance Arbitrary Grid where
   arbitrary = let (Grid g) = emptyGrid
               in Grid <$> mapM (const arbitrary) g
 
-data PieceMove = PlaceMove (PieceType,Point) | PushMove (PieceType,Point) Direction | RemoveMove (Maybe [(PieceType,Point)])
+data IntroducePieceMove = PlaceMove (PieceType,Point) | PushMove (PieceType,Point) Direction
   deriving (Eq,Ord,Show)
 
+data RemovePieceMove = RemoveMove (Maybe [(PieceType,Point)])
+  deriving (Eq,Ord,Show)
+
+type PieceMove =  (Maybe [RemovePieceMove], IntroducePieceMove, Maybe [RemovePieceMove])
+
 data GIPFState = GIPFState
-  { _gsTurnNum :: Integer
-  , _gsTurn    :: Player
-  , _gsGrid    :: Grid
-  , _gsMoves   :: [PieceMove]
+  { _gsTurn          :: Player
+  , _gsGrid          :: Grid
+  , _gsMoves         :: [PieceMove]
+  , _gsPlayer1Pieces :: Int
+  , _gsPlayer2Pieces :: Int
   }
   deriving (Eq, Show)
+
+standardGIPFState :: GIPFState
+standardGIPFState = GIPFState
+  { _gsTurn = Player1
+  , _gsGrid = standardGrid
+  , _gsMoves = []
+  , _gsPlayer1Pieces = 10
+  , _gsPlayer2Pieces = 10
+  }
+
+torunamentGIPFState :: GIPFState
+torunamentGIPFState = GIPFState
+  { _gsTurn = Player1
+  , _gsGrid = emptyGrid
+  , _gsMoves = []
+  , _gsPlayer1Pieces = 16
+  , _gsPlayer2Pieces = 16
+  }
 
 distance :: Point -> Point -> Int
 distance (q,r) (q',r') = maximum $ map abs [q-q',r-r',q + r - q' - r']
@@ -192,21 +218,67 @@ getRowExtensions (Grid g) = map extension
         neighbor = getNeighbor (x,y) d
 
 makeMove :: Player -> Grid -> PieceMove -> Either String Grid
-makeMove pl (Grid g) (PlaceMove (pT,p)) = case Map.lookup p g of
-  Just _  -> Right $ Grid $ Map.insert p (Just $ Piece pl pT) g
-  Nothing -> Left "Can't place a piece on top of another piece"
-makeMove pl g (PushMove (pT,p) d) = maybe (Left "Invalid push") Right $ playPiece (p, Piece pl pT) d g
-makeMove _ (Grid g) (RemoveMove (Just rs))
-  | pcsExist  = Right $ Grid $ foldr (Map.adjust (const Nothing) . snd) g rs
-  | otherwise = Left "All the pieces do not exist in the grid"
+makeMove pl g (rm,im,rm') = do
+    r <- fromMaybe (Right g) (foldM goR g <$> rm)
+    i <- goI r im
+    fromMaybe (Right i) (foldM goR i <$> rm')
   where
-    pcsExist = isJust $ traverse (\(pT,r) -> r `Map.lookup` g >>= fmap (pieceTypeEq pT)) rs
-    pieceTypeEq t (Piece _ t') = t == t'
-makeMove _ _ (RemoveMove Nothing) = undefined
+    goI (Grid g') (PlaceMove (pT,p)) = case Map.lookup p g' of
+      Just _  -> Right $ Grid $ Map.insert p (Just $ Piece pl pT) g'
+      Nothing -> Left "Can't place a piece on top of another piece"
+    goI g' (PushMove (pT,p) d) = maybe (Left "Invalid push") Right $ playPiece (p, Piece pl pT) d g'
+    goR (Grid g') (RemoveMove (Just rs))
+      | pcsExist  = Right $ Grid $ foldr (Map.adjust (const Nothing) . snd) g' rs
+      | otherwise = Left "All the pieces do not exist in the grid"
+      where
+        pcsExist = isJust $ traverse (\(pT,r) -> r `Map.lookup` g' >>= fmap (pieceTypeEq pT)) rs
+        pieceTypeEq t (Piece _ t') = t == t'
+    goR _ (RemoveMove Nothing) = undefined
 
-nextGIPFState :: GIPFState -> PieceMove -> Either String GIPFState
-nextGIPFState gs p = undefined
-  where
-    nextPlayer
-      | _gsTurn gs == Player1 = Player2
-      | otherwise             = Player1
+-- nextGIPFState :: GIPFState -> PieceMove -> Either String GIPFState
+-- nextGIPFState gs p = nextGrid >>= nextState
+--   where
+--     nextGrid = makeMove (_gsTurn gs) (_gsGrid gs) p
+--     piecesUsed :: PieceMove -> Either [Point] (Int,Int)
+--     piecesUsed (rms,im,rms') = do
+--       r <- fromMaybe (pure (0,0)) (foldM (piecesUsedR (_gsGrid gs)) (0,0) <$> rms)
+--       --(\(rx,ry) (ix,iy) (rx',ry') -> (rx+ix+rx',ry+iy+ry'))
+--       _
+--       -- <*> piecesUsedI im
+--       -- <*> fromMaybe (pure (0,0)) (traverse piecesUsedR <$> rms')
+--       t b a = do
+--
+--     piecesUsedI (PlaceMove (GIPFPiece,_))    = Right $ adjustCount (-2,0)
+--     piecesUsedI (PlaceMove (NormalPiece,_))  = Right $ adjustCount (-1,0)
+--     piecesUsedI (PushMove (GIPFPiece,_) _)   = Right $ adjustCount (-2,0)
+--     piecesUsedI (PushMove (NormalPiece,_) _) = Right $ adjustCount (-1,0)
+--     piecesUsedR _ (RemoveMove Nothing)         = undefined
+--     piecesUsedR g (RemoveMove (Just ps))       = op <$> playerLine <*> pcCounts
+--       where
+--         pcs = traverse (\(_,c) -> maybe (Left [c]) Right $ join $ getPc c (_gsGrid gs)) ps
+--         getPc c (Grid g) = Map.lookup c g
+--         --TODO: When tied for length make sure the current player is the winner of the line
+--         playerLine = head . head . sortOn length . group . map getPlayer <$> pcs
+--         getPlayer (Piece pl _) = pl
+--         pcCounts = foldr f (0,0) <$> pcs
+--         f (Piece Player1 GIPFPiece) (x,y)   = (x+2,y)
+--         f (Piece Player2 GIPFPiece) (x,y)   = (x,y+2)
+--         f (Piece Player1 NormalPiece) (x,y) = (x+1,y)
+--         f (Piece Player2 NormalPiece) (x,y) = (x,y+1)
+--         op Player1 (x,y) = (x,negate y)
+--         op Player2 (x,y) = (negate x,y)
+--     adjustCount (x,y)
+--       | _gsTurn gs == Player1 = (x,y)
+--       | otherwise             = (y,x)
+--     nextPlayer
+--       | _gsTurn gs == Player1 = Player2
+--       | otherwise             = Player1
+--     nextState g = case piecesUsed p of
+--       AccFailure cs -> Left $ "Bad coords: " ++ intercalate "," (map show cs)
+--       AccSuccess (p1,p2) -> Right GIPFState
+--         { _gsTurn = nextPlayer
+--         , _gsMoves = _gsMoves gs ++ [p]
+--         , _gsGrid = g
+--         , _gsPlayer1Pieces = _gsPlayer1Pieces gs + p1
+--         , _gsPlayer2Pieces = _gsPlayer2Pieces gs + p2
+--         }
