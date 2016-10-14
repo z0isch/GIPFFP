@@ -74,7 +74,7 @@ coordToPoint = coordToRep p2 . (fromIntegral *** fromIntegral)
 
 testGame :: IO ()
 testGame = do
-  mMoves <- parseFromFile gipfGameParser "testGame3.gipf"
+  mMoves <- parseFromFile gipfGameParser "testGame.gipf"
   case mMoves of
     Nothing  -> putStrLn "Can't parse file"
     Just moves ->   let

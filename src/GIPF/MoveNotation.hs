@@ -28,11 +28,10 @@ pieceNotation :: (PieceType, Point) -> Either String String
 pieceNotation (pT,p) = (pieceTypeToNotation pT ++ ) <$> pointToNotation p
 
 pieceMoveToNotation :: PieceMove -> AccValidation [String] String
-pieceMoveToNotation (rm, im, rm') = (\rs i rs' -> intercalate ";" $ filter (not . null) $ concat [rs,[i],rs'])
-  <$> fromMaybe (AccSuccess [""]) (traverse goR <$> rm)
-  <*> goI im
-  <*> fromMaybe (AccSuccess [""]) (traverse goR <$> rm')
+pieceMoveToNotation (rm, im, rm') = getMoveString <$> traverseRemove rm <*> goI im <*> traverseRemove rm'
   where
+    getMoveString rs i rs' = intercalate ";" $ concat [rs,[i],rs']
+    traverseRemove r = fromMaybe (AccSuccess []) (traverse goR <$> r)
     goI (PlaceMove pM) = mkAcc $ pieceNotation pM
     goI (PushMove (pT,p) dir) = makeNotation <$> mkAcc (pieceNotation (pT,opositeNeighbor)) <*> mkAcc (pieceNotation (NormalPiece,p))
       where
